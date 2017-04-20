@@ -38,6 +38,9 @@ class MSFT_xSQLServerSetup : OMI_BaseResource
     [Read, Description("Output username for the Reporting Services service.")] String RSSvcAccountUsername;
     [Write, EmbeddedInstance("MSFT_Credential"), Description("Service account for Analysis Services service.")] String ASSvcAccount;
     [Read, Description("Output username for the Analysis Services service.")] String ASSvcAccountUsername;
+    [Write, EmbeddedInstance("MSFT_Credential"), Description("Service account for the Distributed Replay Controller service.")] String DReplayCtlrAccount;
+    [Read, Description("Output username for the Distributed Replay Controller service.")] String DReplayCtlrAccountUsername;
+    [Write, Description("Array of accounts to grant permission to the Distributed Replay Controller service")] String DReplayCtlrUserAccounts[];
     [Write, Description("Collation for Analysis Services.")] String ASCollation;
     [Write, Description("Array of accounts to be made Analysis Services admins.")] String ASSysAdminAccounts[];
     [Write, Description("Path for Analysis Services data files.")] String ASDataDir;

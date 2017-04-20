@@ -116,6 +116,8 @@ function Get-TargetResource
     }
 
     $integrationServiceName = "MsDtsServer$($sqlVersion)0"
+    # TODO: Verify this is correct and the name is not instance-specific
+    $dReplayControllerServiceName = "SQL Server Distributed Replay Controller"
 
     $features = ''
     $clusteredSqlGroupName = ''
@@ -270,6 +272,12 @@ function Get-TargetResource
         $integrationServiceAccountUsername = (Get-CimInstance -ClassName Win32_Service -Filter "Name = '$integrationServiceName'").StartName
     }
 
+    if ($services | Where-Object {$_.Name -eq $dReplayControllerServiceName})
+    {
+        $features += 'DREPLAY_CTLR,'
+        $dReplayControllerServiceAccountUsername = (Get-CimInstance -ClassName Win32_Service -Filter "Name = '$dReplayControllerServiceName'").StartName
+    }
+
     $registryUninstallPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
 
     # Verify if SQL Server Management Studio 2008 or SQL Server Management Studio 2008 R2 (major version 10) is installed
@@ -393,6 +401,7 @@ function Get-TargetResource
         ASTempDir = $analysisTempDirectory
         ASConfigDir = $analysisConfigDirectory
         ISSvcAccountUsername = $integrationServiceAccountUsername
+        DReplayCtlrAccount = $dReplayControllerServiceAccountUsername
         FailoverClusterGroupName = $clusteredSqlGroupName
         FailoverClusterNetworkName = $clusteredSqlHostname
         FailoverClusterIPAddress = $clusteredSqlIPAddress
@@ -529,6 +538,12 @@ function Get-TargetResource
 
     .PARAMETER ISSvcAccount
        Service account for Integration Services service.
+
+    .PARAMETER DReplayCtlrAccount
+       Service account for the Distributed Replay Controller service.
+
+    .PARAMETER DReplayCtlrUserAccount
+        Array of accounts to grant permission to the Distributed Replay Controller service.
 
     .PARAMETER BrowserSvcStartupType
        Specifies the startup mode for SQL Server Browser service
@@ -709,6 +724,14 @@ function Set-TargetResource
         [Parameter()]
         [System.Management.Automation.PSCredential]
         $ISSvcAccount,
+
+        [Parameter()]
+        [System.Management.Automation.PSCredential]
+        $DReplayCtlrAccount,
+
+        [Parameter()]
+        [System.String[]]
+        $DReplayCtlrUserAccounts,
 
         [Parameter()]
         [System.String]
@@ -1199,6 +1222,17 @@ function Set-TargetResource
             $setupArguments += (Get-ServiceAccountParameters -ServiceAccount $ISSvcAccount -ServiceType 'IS')
         }
     }
+    if ($Features.Contains('DREPLAY_CTLR'))
+    {
+        if ($PSBoundParameters.ContainsKey('DReplayCtlrAccount'))
+        {
+            $setupArguments += (Get-ServiceAccountParameters -ServiceAccount $DReplayCtlrAccount -ServiceType 'CTLR')
+        }
+        if ($PSBoundParameters.ContainsKey('DReplayCtlrUserAccounts'))
+        {
+            $setupArguments['CTLRUSERS'] += $DReplayCtlrUserAccounts
+        }
+    }
 
     # Automatically include any additional arguments
     foreach ($argument in $argumentVars)
@@ -1260,7 +1294,7 @@ function Set-TargetResource
         $log = $log.Replace($ProductKey,"*****-*****-*****-*****-*****")
     }
 
-    $logVars = @('AgtSvcAccount', 'SQLSvcAccount', 'FTSvcAccount', 'RSSvcAccount', 'ASSvcAccount','ISSvcAccount')
+    $logVars = @('AgtSvcAccount', 'SQLSvcAccount', 'FTSvcAccount', 'RSSvcAccount', 'ASSvcAccount','ISSvcAccount', 'DReplayCtlrAccount')
     foreach ($logVar in $logVars)
     {
         if ($PSBoundParameters.ContainsKey($logVar))
@@ -1436,6 +1470,12 @@ function Set-TargetResource
 
     .PARAMETER ISSvcAccount
        Service account for Integration Services service.
+
+    .PARAMETER DReplayCtlrAccount
+       Service account for the Distributed Replay Controller service.
+
+    .PARAMETER DReplayCtlrUserAccounts
+        Array of accounts to grant permission to the Distributed Replay Controller service.
 
     .PARAMETER BrowserSvcStartupType
        Specifies the startup mode for SQL Server Browser service
@@ -1615,6 +1655,14 @@ function Test-TargetResource
         [Parameter()]
         [System.Management.Automation.PSCredential]
         $ISSvcAccount,
+
+        [Parameter()]
+        [System.Management.Automation.PSCredential]
+        $DReplayCtlrAccount,
+
+        [Parameter()]
+        [System.String[]]
+        $DReplayCtlrUserAccounts,
 
         [Parameter()]
         [System.String]
@@ -1928,7 +1976,7 @@ function Get-ServiceAccountParameters
         $ServiceAccount,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('SQL','AGT','IS','RS','AS','FT')]
+        [ValidateSet('SQL','AGT','IS','RS','AS','FT','CTLR')]
         [String]
         $ServiceType
     )

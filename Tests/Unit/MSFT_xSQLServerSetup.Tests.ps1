@@ -96,6 +96,8 @@ try
         $mockNamedInstance_FailoverClusterIPAddress = '10.0.0.20'
         $mockNamedInstance_FailoverClusterGroupName = "SQL Server ($mockNamedInstance_InstanceName)"
 
+        $mockDReplayControllerServiceName = 'SQL Server Distributed Replay Controller'
+
         $mockmockSetupCredentialUserName = "COMPANY\sqladmin"
 
         $mockmockSetupCredentialPassword = "dummyPassw0rd" | ConvertTo-SecureString -asPlainText -Force
@@ -110,6 +112,9 @@ try
         $mockAnalysisServiceAccount = 'COMPANY\AnalysisAccount'
         $mockAnslysisServicePassword = 'Analysiss3v!c3P@ssw0rd'
         $mockAnalysisServiceCredential = New-Object System.Management.Automation.PSCredential($mockAnalysisServiceAccount,($mockSQLServicePassword | ConvertTo-SecureString -AsPlainText -Force))
+        $mockDReplayControllerServiceAccount = 'COMPANY\DReplayCtlrAccount'
+        $mockDReplayControllerServicePassword = 'DReplayControllerP@ssw0rd'
+        $mockDReplayControllerServiceCredential = New-Object System.Management.Automation.PSCredential($mockDReplayControllerServiceAccount,($mockDReplayControllerServicePassword | ConvertTo-SecureString -AsPlainText -Force))
 
         $mockClusterNodes = @($env:COMPUTERNAME,'SQL01','SQL02')
 
@@ -294,6 +299,11 @@ try
                     New-Object Object |
                         Add-Member -MemberType NoteProperty -Name 'Name' -Value $mockDefaultInstance_AnalysisServiceName -PassThru |
                         Add-Member -MemberType NoteProperty -Name 'StartName' -Value $mockSqlServiceAccount -PassThru -Force
+                ),
+                (
+                    New-Object Object |
+                        Add-Member -MemberType NoteProperty -Name 'Name' -Value $mockDReplayControllerServiceName -PassThru |
+                        Add-Member -MemberType NoteProperty -Name 'StartName' -Value $mockDReplayControllerServiceAccount -PassThru -Force
                 )
             )
         }
@@ -358,6 +368,16 @@ try
             )
         }
 
+        $mockGetCimInstance_DReplayService = {
+            return @(
+                (
+                    New-Object Object |
+                        Add-Member -MemberType NoteProperty -Name 'Name' -Value $mockDReplayControllerServiceName -PassThru |
+                        Add-Member -MemberType NoteProperty -Name 'StartName' -Value $mockDReplayControllerServiceAccount -PassThru -Force
+                )
+            )
+        }
+
         $mockGetService_NamedInstance = {
             return @(
                 (
@@ -389,6 +409,11 @@ try
                     New-Object Object |
                         Add-Member -MemberType NoteProperty -Name 'Name' -Value $mockNamedInstance_AnalysisServiceName -PassThru |
                         Add-Member -MemberType NoteProperty -Name 'StartName' -Value $mockSqlServiceAccount -PassThru -Force
+                ),
+                (
+                    New-Object Object |
+                        Add-Member -MemberType NoteProperty -Name 'Name' -Value $mockDReplayControllerServiceName -PassThru |
+                        Add-Member -MemberType NoteProperty -Name 'StartName' -Value $mockDReplayControllerServiceAccount -PassThru -Force
                 )
             )
         }
@@ -868,7 +893,7 @@ try
                 These are written with both lower-case and upper-case to make sure we support that.
                 The feature list must be written in the order it is returned by the function Get-TargerResource.
             #>
-            Features = 'SQLEngine,Replication,Conn,Bc,FullText,Rs,As,Is,Ssms,Adv_Ssms'
+            Features = 'SQLEngine,Replication,Conn,Bc,FullText,Rs,As,Is,DReplay_Ctlr,Ssms,Adv_Ssms'
         }
 
         $mockDefaultClusterParameters = @{
@@ -1248,6 +1273,11 @@ try
                             $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
                         } -MockWith $mockGetCimInstance_DefaultInstance_AnalysisService -Verifiable
 
+                        Mock -CommandName Get-CimInstance -ParameterFilter {
+                            $ClassName -eq 'Win32_Service' -and
+                            $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                        } -MockWith $mockGetCimInstance_DReplayService -Verifiable
+
                         # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                         Mock -CommandName Get-CimInstance -MockWith {
                             throw "Mock Get-CimInstance was called with unexpected parameters. ClassName=$ClassName, Filter=$Filter"
@@ -1271,11 +1301,11 @@ try
                         $result = Get-TargetResource @testParameters
                         if ($mockSqlMajorVersion -in (13,14))
                         {
-                            $result.Features | Should Be 'SQLENGINE,REPLICATION,FULLTEXT,RS,AS,IS'
+                            $result.Features | Should Be 'SQLENGINE,REPLICATION,FULLTEXT,RS,AS,IS,DREPLAY_CTLR'
                         }
                         else
                         {
-                            $result.Features | Should Be 'SQLENGINE,REPLICATION,FULLTEXT,RS,AS,IS,SSMS,ADV_SSMS'
+                            $result.Features | Should Be 'SQLENGINE,REPLICATION,FULLTEXT,RS,AS,IS,DREPLAY_CTLR,SSMS,ADV_SSMS'
                         }
                     }
                 }
@@ -1348,6 +1378,11 @@ try
                             $ClassName -eq 'Win32_Service' -and
                             $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
                         } -MockWith $mockGetCimInstance_DefaultInstance_AnalysisService -Verifiable
+
+                        Mock -CommandName Get-CimInstance -ParameterFilter {
+                            $ClassName -eq 'Win32_Service' -and
+                            $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                        } -MockWith $mockGetCimInstance_DReplayService -Verifiable
 
                         # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                         Mock -CommandName Get-CimInstance -MockWith {
@@ -1437,6 +1472,11 @@ try
                         Assert-MockCalled -CommandName Get-CimInstance -ParameterFilter {
                             $ClassName -eq 'Win32_Service' -and
                             $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
+                        } -Exactly -Times 1 -Scope It
+
+                        Assert-MockCalled -CommandName Get-CimInstance -ParameterFilter {
+                            $ClassName -eq 'Win32_Service' -and
+                            $Filter -eq "Name = '$mockDReplayControllerServiceName'"
                         } -Exactly -Times 1 -Scope It
                         #endregion Assert Get-CimInstance
                     }
@@ -1552,6 +1592,11 @@ try
                             $ClassName -eq 'Win32_Service' -and
                             $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
                         } -MockWith $mockGetCimInstance_DefaultInstance_AnalysisService -Verifiable
+
+                        Mock -CommandName Get-CimInstance -ParameterFilter {
+                            $ClassName -eq 'Win32_Service' -and
+                            $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                        } -MockWith $mockGetCimInstance_DReplayService -Verifiable
 
                         # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                         Mock -CommandName Get-CimInstance -MockWith {
@@ -1874,6 +1919,11 @@ try
                             $ClassName -eq 'Win32_Service' -and
                             $Filter -eq "Name = '$mockNamedInstance_AnalysisServiceName'"
                         } -MockWith $mockGetCimInstance_NamedInstance_AnalysisService -Verifiable
+
+                        Mock -CommandName Get-CimInstance -ParameterFilter {
+                            $ClassName -eq 'Win32_Service' -and
+                            $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                        } -MockWith $mockGetCimInstance_DReplayService -Verifiable
 
                         # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                         Mock -CommandName Get-CimInstance -MockWith {
@@ -2255,6 +2305,11 @@ try
                         $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
                     } -MockWith $mockGetCimInstance_DefaultInstance_AnalysisService -Verifiable
 
+                    Mock -CommandName Get-CimInstance -ParameterFilter {
+                        $ClassName -eq 'Win32_Service' -and
+                        $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                    } -MockWith $mockGetCimInstance_DReplayService -Verifiable
+
                     # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                     Mock -CommandName Get-CimInstance -MockWith {
                         throw "Mock Get-CimInstance was called with unexpected parameters. ClassName=$ClassName, Filter=$Filter"
@@ -2320,7 +2375,7 @@ try
                     #endregion Assert Get-CimInstance
                 }
 
-                It 'Should return that the desired state is asbent when ADV_SSMS product is missing' {
+                It 'Should return that the desired state is absent when ADV_SSMS product is missing' {
                     Mock -CommandName Get-Service -MockWith $mockGetService_DefaultInstance -Verifiable
 
                     #region Mock Get-CimInstance
@@ -2353,6 +2408,11 @@ try
                         $ClassName -eq 'Win32_Service' -and
                         $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
                     } -MockWith $mockGetCimInstance_DefaultInstance_AnalysisService -Verifiable
+
+                    Mock -CommandName Get-CimInstance -ParameterFilter {
+                        $ClassName -eq 'Win32_Service' -and
+                        $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                    } -MockWith $mockGetCimInstance_DReplayService -Verifiable
 
                     # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                     Mock -CommandName Get-CimInstance -MockWith {
@@ -2415,6 +2475,11 @@ try
                     Assert-MockCalled -CommandName Get-CimInstance -ParameterFilter {
                         $ClassName -eq 'Win32_Service' -and
                         $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
+                    } -Exactly -Times 1 -Scope It
+
+                    Assert-MockCalled -CommandName Get-CimInstance -ParameterFilter {
+                        $ClassName -eq 'Win32_Service' -and
+                        $Filter -eq "Name = '$mockDReplayControllerServiceName'"
                     } -Exactly -Times 1 -Scope It
                     #endregion Assert Get-CimInstance
                 }
@@ -2530,6 +2595,11 @@ try
                         $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
                     } -MockWith $mockGetCimInstance_DefaultInstance_AnalysisService -Verifiable
 
+                    Mock -CommandName Get-CimInstance -ParameterFilter {
+                        $ClassName -eq 'Win32_Service' -and
+                        $Filter -eq "Name = '$mockDReplayControllerServiceName'"
+                    } -MockWith $mockGetCimInstance_DReplayService -Verifiable
+
                     # If Get-CimInstance is used in any other way than those mocks with a ParameterFilter, then throw and error
                     Mock -CommandName Get-CimInstance -MockWith {
                         throw "Mock Get-CimInstance was called with unexpected parameters. ClassName=$ClassName, Filter=$Filter"
@@ -2602,6 +2672,11 @@ try
                     Assert-MockCalled -CommandName Get-CimInstance -ParameterFilter {
                         $ClassName -eq 'Win32_Service' -and
                         $Filter -eq "Name = '$mockDefaultInstance_AnalysisServiceName'"
+                    } -Exactly -Times 1 -Scope It
+
+                    Assert-MockCalled -CommandName Get-CimInstance -ParameterFilter {
+                        $ClassName -eq 'Win32_Service' -and
+                        $Filter -eq "Name = '$mockDReplayControllerServiceName'"
                     } -Exactly -Times 1 -Scope It
                     #endregion Assert Get-CimInstance
                 }
@@ -4381,7 +4456,7 @@ try
         }
 
         Describe 'Get-ServiceAccountParameters' -Tag 'Helper' {
-            $serviceTypes = @('SQL','AGT','IS','RS','AS','FT')
+            $serviceTypes = @('SQL','AGT','IS','RS','AS','FT','CTLR')
 
             BeforeAll {
                 $mockServiceAccountPassword = ConvertTo-SecureString 'Password' -AsPlainText -Force
